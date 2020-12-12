@@ -16,192 +16,216 @@ import javax.swing.Timer;
 
 public class GameOfLife {
 	static JFrame sizeSelect, game, start;
-	static JSpinner sizex, sizey;
+	static JSpinner sizeX, sizeY;
 	static JButton startButton;
-	static JButton[][] cells;
-	static boolean[][] next;
+	static JButton[][] tiles; // 2D Array of Game Tiles
+	static boolean[][] next; // 2D Array of Tile States in Following Update
 	static Font a = new Font("Times New Roman", Font.BOLD, 60);
 	static Timer t = new Timer(200, new Update());
-	static int width, height;
-	static boolean mouseDown;
-	
+	static int width, height; // Width and Height of the Game Grid
+	static boolean mouseDown; // Tracks Left Mouse Button State
+
+	// Makes the Size Selection Frame
 	public static void main(String[] args) {
+		// Makes Frame
 		sizeSelect = new JFrame("Size Selection");
 		sizeSelect.setSize(400, 250);
 		sizeSelect.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		sizeSelect.setLocationRelativeTo(null);
 		sizeSelect.setLayout(new GridLayout(2, 1, 5, 5));
 
+		// Adds Spinners to Frame
 		JPanel spinners = new JPanel();
 		spinners.setLayout(new GridLayout(1, 2, 5, 5));
-		sizex = new JSpinner(new SpinnerNumberModel(50, 5, 50, 1));
-		sizey = new JSpinner(new SpinnerNumberModel(50, 5, 50, 1));
-		sizex.setFont(a);
-		sizey.setFont(a);
-		spinners.add(sizex);
-		spinners.add(sizey);
+		sizeX = new JSpinner(new SpinnerNumberModel(50, 5, 50, 1));
+		sizeY = new JSpinner(new SpinnerNumberModel(50, 5, 50, 1));
+		sizeX.setFont(a);
+		sizeY.setFont(a);
+		spinners.add(sizeX);
+		spinners.add(sizeY);
 		sizeSelect.add(spinners);
 
+		// Adds Confirm Button to Frame
 		JButton confirm = new JButton("Confirm");
-		confirm.addMouseListener(new BH());
+		confirm.addMouseListener(new ButtonHandler());
 		confirm.setFont(a);
 		sizeSelect.add(confirm);
 
+		// Renders Frame Visible
 		sizeSelect.setVisible(true);
 	}
 
+	// Makes the Start and Game Frames
 	public GameOfLife() {
-		width = (int) sizex.getValue();
-		height = (int) sizey.getValue();
-		int grid = Math.round(800f / height);
+		// Gets Size of Grid
+		width = (int) sizeX.getValue();
+		height = (int) sizeY.getValue();
+		int grid = Math.round(800f / height); // Pixel Size of Each Tile
 
+		// Makes Start Frame
 		start = new JFrame();
 		start.setSize(200, 100);
 		start.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
+		// Adds Start Button to Start Frame
 		startButton = new JButton("Start");
-		startButton.addMouseListener(new BH());
+		startButton.addMouseListener(new ButtonHandler());
 		startButton.setFont(a);
 		start.add(startButton);
 
+		// Makes Game Frame
 		game = new JFrame("The Game of Life");
 		game.setSize((width-1) * grid, height * grid);
 		game.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		game.setLocationRelativeTo(null);
 		game.setLayout(new GridLayout(height, width));
 
-		cells = new JButton[width][height];
+		// Sets Tile Arrays' Sizes
+		tiles = new JButton[width][height];
 		next = new boolean[width][height];
 
+		// Fills Tile Grid
 		for (int y = 0; y < height; y++) {
 			for (int x = 0; x < width; x++) {
-				StringBuilder xTxt = new StringBuilder(Integer.toString(x));
-				StringBuilder yTxt = new StringBuilder(Integer.toString(y));
-				while (xTxt.length() < 2) xTxt.insert(0, "0");
-				while (yTxt.length() < 2) yTxt.insert(0, "0");
-
-				JButton clone = new JButton(xTxt.toString() + yTxt);
+				// Creates Tile Clones
+				JButton clone = new JButton();
 				clone.setFont(new Font("Arial", Font.PLAIN, 0));
 				clone.setForeground(Color.BLACK);
 				clone.setBackground(Color.BLACK);
-				clone.addMouseListener(new BH());
+				clone.addMouseListener(new ButtonHandler());
 
-				cells[x][y] = clone;
+				// Sets Tiles Arrays' States
+				tiles[x][y] = clone;
 				next[x][y] = false;
+				// Adds To Grid
 				game.add(clone);
 			}
 		}
 
+		// Renders Frames Visible
 		start.setVisible(true);
 		game.setVisible(true);
 	}
 
+	private static class ButtonHandler implements MouseListener {
+		public void buttonPress(JButton b) {
+			switch (b.getText()) {
+				// Instantiates Game
+				case "Confirm":
+					sizeSelect.setVisible(false);
+					mouseDown = false;
+					new GameOfLife();
+					break;
+				// Plays Simulation
+				case "Start":
+					// Saves Set Tiles
+					for (int y = 0; y < height; y++) {
+						for (int x = 0; x < width; x++) {
+							if (tiles[x][y].getBackground() == Color.WHITE) next[x][y] = true;
+						}
+					}
+					startButton.setText("Stop");
+
+					t.start();
+					break;
+				// Pauses Simulation
+				case "Stop":
+					startButton.setText("Start");
+
+					t.stop();
+					break;
+				// Inverts Selected Tile State
+				default:
+					if (!t.isRunning())
+						tileSetColor(b, b.getBackground() == Color.BLACK ? Color.WHITE : Color.BLACK);
+					break;
+			}
+		}
+
+		@Override
+		public void mousePressed(MouseEvent e) {
+			mouseDown = true;
+			if (e.getSource() instanceof JButton) buttonPress(((JButton) e.getSource()));
+		}
+		@Override
+		public void mouseEntered(MouseEvent e) {
+			if (e.getSource() instanceof JButton && mouseDown) buttonPress(((JButton) e.getSource()));
+		}
+		@Override
+		public void mouseReleased(MouseEvent e) {
+			mouseDown = false;
+		}
+
+		// Extra MouseListener Events
+		@Override
+		public void mouseClicked(MouseEvent e) {}
+		@Override
+		public void mouseExited(MouseEvent e) {}
+	}
+
+	// Used by Timer
 	private static class Update implements ActionListener {
+		// Updates Board State
 		@Override
 		public void actionPerformed(ActionEvent e) {
 			int liveCount = 0;
 
+			// Sets All Next States
 			for (int y = 0; y < height; y++) {
 				for (int x = 0; x < width; x++) {
+					// Logic is Based on Surrounding Tile Count
 					switch (surround(x, y)) {
 						case 2:
-						break;
-					case 3:
-						next[x][y] = true;
-						break;
-					default:
-						next[x][y] = false;
+							break;
+						case 3:
+							next[x][y] = true;
+							break;
+						default:
+							next[x][y] = false;
 					}
 				}
 			}
 
+			// Sets All States
 			for (int y = 0; y < height; y++) {
 				for (int x = 0; x < width; x++) {
-					setColor(x, y, next[x][y] ? Color.WHITE : Color.BLACK);
+					tileSetColor(tiles[x][y], next[x][y] ? Color.WHITE : Color.BLACK);
 					if (next[x][y]) liveCount++;
 				}
 			}
 
+			// Ends Game
 			if (liveCount == 0) {
 				t.stop();
 				JOptionPane.showMessageDialog(null, "Game Over");
 				startButton.setText("Start");
 			}
 		}
-	}
 
-	private static int surround(int x, int y) {
-		int count = 0;
+		// Returns Count of Surrounding Live Tiles
+		private static int surround(int x, int y) {
+			int count = 0;
 
-		for (int yIt = -1; yIt < 2; yIt++) {
-			for (int xIt = -1; xIt < 2; xIt++) {
-				if (!(xIt == 0 && yIt == 0)) {
-					int relativeX = ((x + xIt) % width + width) % width, relativeY = ((y + yIt) % height + height) % height;
+			// Checks 8 Surrounding Tiles
+			for (int yIt = -1; yIt < 2; yIt++) {
+				for (int xIt = -1; xIt < 2; xIt++) {
+					if (!(xIt == 0 && yIt == 0)) {
+						// Calculates Surrounding Indexes in case of Looping
+						int relativeX = ((x + xIt) % width + width) % width;
+						int relativeY = ((y + yIt) % height + height) % height;
 
-					if (cells[relativeX][relativeY].getBackground() == Color.WHITE) count++;
-				}
-			}
-		}
-
-		return count;
-	}
-
-	private static class BH implements MouseListener {
-		public void ButtonPress(String s) {
-			switch (s) {
-			case "Confirm":
-				sizeSelect.setVisible(false);		
-				mouseDown = false;
-				new GameOfLife();
-				break;
-			case "Start":
-				for (int y = 0; y < height; y++) {
-					for (int x = 0; x < width; x++) {
-						if (cells[x][y].getBackground() == Color.WHITE) next[x][y] = true;
+						// Counts Live Tiles
+						if (tiles[relativeX][relativeY].getBackground() == Color.WHITE) count++;
 					}
 				}
-				startButton.setText("Stop");
-
-				t.start();
-				break;
-			case "Stop":				
-				startButton.setText("Start");
-
-				t.stop();
-				break;
-			default:
-				if (!t.isRunning()) {
-					int x = Integer.parseInt(s.substring(0, 2)), y = Integer.parseInt(s.substring(2, 4));
-					if (cells[x][y].getBackground() == Color.BLACK) setColor(x, y, Color.WHITE);
-					else setColor(x, y, Color.BLACK);
-				}
-				break;
 			}
-		}
 
-		@Override
-		public void mouseClicked(MouseEvent e) {}
-		@Override
-		public void mousePressed(MouseEvent e) {
-			mouseDown = true;
-			if (e.getSource() instanceof JButton) 
-				ButtonPress(((JButton) e.getSource()).getText());
+			return count;
 		}
-		@Override
-		public void mouseReleased(MouseEvent e) {
-			mouseDown = false;
-		}
-		@Override
-		public void mouseEntered(MouseEvent e) {
-			if (e.getSource() instanceof JButton && mouseDown) 
-				ButtonPress(((JButton) e.getSource()).getText());
-		}
-		@Override
-		public void mouseExited(MouseEvent e) {}
 	}
 
-	private static void setColor(int x, int y, Color c) {
-		cells[x][y].setBackground(c);
-		cells[x][y].setForeground(c);
+	private static void tileSetColor(JButton b, Color c) {
+		b.setBackground(c);
+		b.setForeground(c);
 	}
 }
